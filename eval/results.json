@@ -1,0 +1,196 @@
+{
+  "n": 20,
+  "refusal_accuracy": 0.9,
+  "retrieval_hit_rate": 1.0,
+  "grounded_rate": 0.8824,
+  "cases": [
+    {
+      "query": "How many days do I have to return a device?",
+      "refused": false,
+      "grounded": true,
+      "sources": [
+        "refunds",
+        "returns",
+        "retention"
+      ]
+    },
+    {
+      "query": "How fast is express shipping?",
+      "refused": false,
+      "grounded": true,
+      "sources": [
+        "shipping",
+        "returns",
+        "refunds"
+      ]
+    },
+    {
+      "query": "When will I get my refund after sending a device back?",
+      "refused": false,
+      "grounded": true,
+      "sources": [
+        "returns",
+        "retention",
+        "refunds"
+      ]
+    },
+    {
+      "query": "How much does the Pro plan cost per user?",
+      "refused": false,
+      "grounded": true,
+      "sources": [
+        "tiers",
+        "ratelimits",
+        "trial"
+      ]
+    },
+    {
+      "query": "What is the API rate limit on the Free plan?",
+      "refused": false,
+      "grounded": true,
+      "sources": [
+        "trial",
+        "ratelimits",
+        "cancel"
+      ]
+    },
+    {
+      "query": "What uptime does Northwind guarantee?",
+      "refused": false,
+      "grounded": true,
+      "sources": [
+        "sla",
+        "shipping",
+        "security"
+      ]
+    },
+    {
+      "query": "What are your email support hours?",
+      "refused": false,
+      "grounded": true,
+      "sources": [
+        "support",
+        "tiers",
+        "export"
+      ]
+    },
+    {
+      "query": "In what formats can I export my data?",
+      "refused": false,
+      "grounded": true,
+      "sources": [
+        "export",
+        "retention",
+        "security"
+      ]
+    },
+    {
+      "query": "How long is the free trial?",
+      "refused": false,
+      "grounded": true,
+      "sources": [
+        "trial",
+        "tiers",
+        "ratelimits"
+      ]
+    },
+    {
+      "query": "Is single sign-on available?",
+      "refused": false,
+      "grounded": true,
+      "sources": [
+        "security",
+        "shipping",
+        "returns"
+      ]
+    },
+    {
+      "query": "I changed my mind about the hardware I bought \u2014 can I send it back?",
+      "refused": false,
+      "grounded": true,
+      "sources": [
+        "returns",
+        "shipping",
+        "refunds"
+      ]
+    },
+    {
+      "query": "What happens to my analytics data once I stop paying?",
+      "refused": false,
+      "grounded": true,
+      "sources": [
+        "retention",
+        "refunds",
+        "export"
+      ]
+    },
+    {
+      "query": "How do I stop my subscription?",
+      "refused": false,
+      "grounded": true,
+      "sources": [
+        "cancel",
+        "shipping",
+        "returns"
+      ]
+    },
+    {
+      "query": "Is my information encrypted while stored?",
+      "refused": false,
+      "grounded": true,
+      "sources": [
+        "security",
+        "shipping",
+        "returns"
+      ]
+    },
+    {
+      "query": "What do I get if the service goes down a lot one month?",
+      "refused": false,
+      "grounded": true,
+      "sources": [
+        "support",
+        "sla",
+        "tiers"
+      ]
+    },
+    {
+      "query": "What is the capital of France?",
+      "refused": true,
+      "grounded": null,
+      "sources": []
+    },
+    {
+      "query": "Who is Northwind's CEO?",
+      "refused": false,
+      "grounded": false,
+      "sources": [
+        "shipping",
+        "security",
+        "retention"
+      ]
+    },
+    {
+      "query": "What is Northwind's stock ticker symbol?",
+      "refused": false,
+      "grounded": false,
+      "sources": [
+        "shipping",
+        "security",
+        "retention"
+      ]
+    },
+    {
+      "query": "Do you offer a student or nonprofit discount?",
+      "refused": true,
+      "grounded": null,
+      "sources": []
+    },
+    {
+      "query": "Can I pay with cryptocurrency?",
+      "refused": true,
+      "grounded": null,
+      "sources": []
+    }
+  ]
+}

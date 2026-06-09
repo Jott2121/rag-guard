@@ -55,6 +55,15 @@ print(evaluate(rag, cases))
 
 Re-run the eval on any model or config change to catch regressions **before a user does**.
 
+**A real run, not a demo fixture.** The two cases above are an illustration — they score 1.0 across the board, so don't read anything into them. `bin/eval_real.py` runs a 20-case labeled set over a 12-doc corpus through a live model (`claude -p`):
+
+```bash
+python bin/eval_real.py
+# {'n': 20, 'refusal_accuracy': 0.9, 'retrieval_hit_rate': 1.0, 'grounded_rate': 0.8824}
+```
+
+The two refusal misses were out-of-corpus identity questions ("who's the CEO?") that scored just over threshold — but the groundedness guard still flagged both, so nothing unsupported got through unflagged. Full output lands in `eval/results.json`.
+
 ## Bring your own model
 
 The model sits behind a one-method seam — `complete(prompt) -> str`. `FakeProvider` keeps tests/CI deterministic and key-free; a real provider (Anthropic Messages API, or a `claude -p` shell-out) drops in without touching the pipeline or guards. Retrieval is the same: the stdlib TF-IDF `Retriever` is a stand-in for real embeddings / a vector DB behind `retrieve()`.
