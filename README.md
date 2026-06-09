@@ -77,4 +77,4 @@ python bin/demo.py                                  # see grounded answer, refus
 
 ## About
 
-Built by **Jeff Otterson** ([Jott2121](https://github.com/Jott2121)). Companion to [**agent-gate**](https://github.com/Jott2121/agent-gate) (an MCP gate for agent work) and [**bow**](https://github.com/Jott2121/bow) — the same discipline: ground it, guard it, measure it, and keep the receipts. MIT.
+Built by **Jeff Otterson** ([Jott2121](https://github.com/Jott2121)). Companion to [**agent-gate**](https://github.com/Jott2121/agent-gate) (an MCP gate for agent work), [**bow**](https://github.com/Jott2121/bow), [**fleet-mode**](https://github.com/Jott2121/fleet-mode), and [**agent-cost-attribution**](https://github.com/Jott2121/agent-cost-attribution) — the same discipline: ground it, guard it, measure it, and keep the receipts. MIT.
