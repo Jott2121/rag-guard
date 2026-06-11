@@ -8,6 +8,8 @@
 
 The failure mode of RAG isn't bad retrieval. It's the confident answer with *nothing behind it*. `rag-guard` is a small, runnable pipeline that makes that hard: it refuses when retrieval finds no support, checks the answer against the context, redacts PII from the output, and traces every step. Pure-stdlib core, **zero runtime dependencies**, bring your own model.
 
+> 🧩 One layer of a five-repo [**cost-governance stack**](https://github.com/Jott2121/bow#the-system-a-cost-governance-stack) for operating AI agents cost-efficiently; [bow](https://github.com/Jott2121/bow) is the flagship that runs every layer in production.
+
 ```text
 "how long is shipping?"  → grounded answer, sources=[ship]      ✓
 "quantum chromodynamics?" → refuses (no support), model not called ✓
