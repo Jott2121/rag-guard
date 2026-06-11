@@ -13,6 +13,8 @@ The failure mode of RAG isn't bad retrieval. It's the confident answer with *not
 "quantum chromodynamics?" → refuses (no support), model not called ✓
 ```
 
+![rag-guard demo: grounded answer, refusal, PII redaction, eval](assets/demo.gif)
+
 ## The three guards
 
 1. **Refuse-when-unsupported.** If the top retrieval score is below threshold, the pipeline refuses and **never even calls the model**. No support, no answer.
