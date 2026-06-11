@@ -26,10 +26,10 @@ Every result carries a **trace** (what was retrieved + scores, refused?, grounde
 ## Install
 
 ```bash
-pip install rag-guard
+pip install guarded-rag
 ```
 
-Zero runtime dependencies — it's stdlib all the way down.
+Zero runtime dependencies — it's stdlib all the way down. (PyPI name is `guarded-rag` — the import is still `rag_guard`.)
 
 ## Quickstart
 

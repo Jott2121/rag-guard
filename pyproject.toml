@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "rag-guard"
+name = "guarded-rag"
 version = "0.1.0"
 description = "Guarded RAG: grounded answers, refuse-when-unsupported, PII redaction, and an eval harness with metrics. Stdlib core, bring-your-own model."
 readme = "README.md"
