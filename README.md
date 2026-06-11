@@ -1,7 +1,7 @@
 # rag-guard
 
 [![ci](https://github.com/Jott2121/rag-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/Jott2121/rag-guard/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/Jott2121/rag-guard/blob/main/LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 
 **Guarded RAG: answers grounded in retrieved context, refusal when there's no support, and an eval harness that puts a number on it.**
@@ -21,17 +21,19 @@ The failure mode of RAG isn't bad retrieval. It's the confident answer with *not
 
 Every result carries a **trace** (what was retrieved + scores, refused?, grounded?) so the system is auditable.
 
-## Quickstart
+## Install
 
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+pip install rag-guard
 ```
 
+Zero runtime dependencies — it's stdlib all the way down.
+
+## Quickstart
+
 ```python
-from rag_guard.retriever import Retriever
-from rag_guard.pipeline import RagGuard
-from rag_guard.providers import FakeProvider   # swap for a real model provider
+from rag_guard import Retriever, RagGuard
+from rag_guard import FakeProvider   # swap for a real model provider
 
 ret = Retriever([
     {"id": "ship",    "text": "Standard shipping takes 3 to 5 business days."},
@@ -41,7 +43,7 @@ rag = RagGuard(ret, FakeProvider("Shipping takes 3 to 5 business days."))
 
 print(rag.answer("how long does shipping take"))
 # {'answer': 'Shipping takes 3 to 5 business days.', 'refused': False,
-#  'grounded': True, 'support': 1.0, 'sources': ['ship'], 'trace': {...}}
+#  'grounded': True, 'support': 1.0, 'sources': ['ship', 'returns'], 'trace': {...}}
 
 print(rag.answer("quantum chromodynamics")["refused"])   # True: refuses, no support
 ```
@@ -107,6 +109,7 @@ rag = RagGuard(ret, AnthropicProvider())
 ## Run / test
 
 ```bash
+git clone https://github.com/Jott2121/rag-guard && cd rag-guard
 pip install -e ".[dev]" && python -m pytest -q     # tests pass on Python 3.11-3.13
 python bin/demo.py                                  # see grounded answer, refusal, PII redaction, eval
 ```

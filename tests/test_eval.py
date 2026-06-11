@@ -6,7 +6,8 @@ not a vibe — and it re-runs on every model/config change to catch regressions.
 """
 import unittest
 
-from rag_guard import retriever as R, pipeline as P, evaluate as E
+from rag_guard import retriever as R, pipeline as P
+from rag_guard.evaluate import evaluate
 from rag_guard.providers import FakeProvider
 
 
@@ -24,7 +25,7 @@ class EvalTests(unittest.TestCase):
             {"query": "how long does shipping take", "gold": "ship", "expect_refusal": False},
             {"query": "quantum chromodynamics lagrangian", "expect_refusal": True},
         ]
-        m = E.evaluate(_rag(), cases)
+        m = evaluate(_rag(), cases)
         self.assertEqual(m["n"], 2)
         self.assertEqual(m["refusal_accuracy"], 1.0)     # both refusal labels correct
         self.assertEqual(m["retrieval_hit_rate"], 1.0)   # gold doc retrieved for the answered case
@@ -34,7 +35,7 @@ class EvalTests(unittest.TestCase):
     def test_detects_a_wrong_refusal(self):
         # label says it should answer, but it's out-of-corpus -> system refuses -> miss
         cases = [{"query": "totally unrelated zzz", "gold": "ship", "expect_refusal": False}]
-        m = E.evaluate(_rag(), cases)
+        m = evaluate(_rag(), cases)
         self.assertEqual(m["refusal_accuracy"], 0.0)
 
 
