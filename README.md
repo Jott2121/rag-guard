@@ -1,6 +1,8 @@
 # rag-guard
 
 [![ci](https://github.com/Jott2121/rag-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/Jott2121/rag-guard/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/Jott2121/rag-guard/actions/workflows/codeql.yml/badge.svg)](https://github.com/Jott2121/rag-guard/actions/workflows/codeql.yml)
+[![Coverage](https://raw.githubusercontent.com/Jott2121/rag-guard/python-coverage-comment-action-data/badge.svg)](https://github.com/Jott2121/rag-guard/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/Jott2121/rag-guard/blob/main/LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 
@@ -119,6 +121,16 @@ python bin/demo.py                                  # see grounded answer, refus
 ```
 
 CI (badge above) runs the same suite across Python 3.11, 3.12, and 3.13 on every push.
+
+## Reliability & security
+
+A guardrail library has to hold itself to its own bar, so the repo is gated:
+
+- **Coverage-gated test matrix** — pytest on Python 3.11–3.13, build fails below the coverage floor (currently 99% covered).
+- **CodeQL** — `security-extended` static analysis on every push, PR, and weekly; findings surface in the Security tab.
+- **Pinned supply chain** — GitHub Actions pinned to commit SHAs, kept current by **Dependabot**.
+- **Branch protection** — `main` requires CI + CodeQL to pass before a merge.
+- **Disclosure policy** — see [SECURITY.md](SECURITY.md); private reporting is enabled.
 
 ## About
 
