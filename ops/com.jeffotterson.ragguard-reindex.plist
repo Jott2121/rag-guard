@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.jeffotterson.ragguard-reindex</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string><string>-m</string><string>rag_guard.reindex</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/jeffreyotterson/rag-guard</string>
+  <key>EnvironmentVariables</key>
+  <dict><key>PYTHONPATH</key><string>/Users/jeffreyotterson/rag-guard</string></dict>
+  <key>StartCalendarInterval</key>
+  <dict><key>Hour</key><integer>3</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StandardErrorPath</key><string>/tmp/ragguard-reindex.err</string>
+  <key>StandardOutPath</key><string>/tmp/ragguard-reindex.out</string>
+</dict>
+</plist>
