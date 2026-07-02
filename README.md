@@ -10,7 +10,7 @@
 
 The failure mode of RAG isn't bad retrieval. It's the confident answer with *nothing behind it*. `rag-guard` is a small, runnable pipeline that makes that hard: it refuses when retrieval finds no support, checks the answer against the context, redacts PII from the output, and traces every step. Pure-stdlib core, **zero runtime dependencies**, bring your own model.
 
-> 🧩 One layer of a five-repo [**cost-governance stack**](https://github.com/Jott2121/bow#the-system-a-cost-governance-stack) for operating AI agents cost-efficiently; [bow](https://github.com/Jott2121/bow) is the flagship that runs every layer in production.
+> 🧩 One layer of a five-repo [**cost-governance stack**](https://github.com/Jott2121/bow#the-system-a-cost-governance-stack) for operating AI agents cost-efficiently; [bow](https://github.com/Jott2121/bow) is the flagship that operates the stack in production.
 
 ```text
 "how long is shipping?"  → grounded answer, sources=[ship]      ✓
@@ -121,6 +121,72 @@ python bin/demo.py                                  # see grounded answer, refus
 ```
 
 CI (badge above) runs the same suite across Python 3.11, 3.12, and 3.13 on every push.
+
+## The guarded-grounding layer (a corpus → web truth ladder)
+
+The core retriever + guards are surface-agnostic, so the repo also ships the pieces to run
+them over a **real knowledge base** with a **three-tier truth ladder**:
+
+1. **Local notes** — `corpus.py` turns a folder of markdown into `{id, text, source, weight}` chunks; `index.py`
+   builds a persisted, **fingerprinted** TF-IDF index that rebuilds only when the corpus changes
+   (a note is searchable the moment it's saved); `service.py` keeps a warm singleton and `cli.py`
+   is a `stdin → JSON` query entry.
+2. **The web** — when local notes can't ground the answer, `webverify.py` escalates to web search
+   (injected, so the core stays network-free and unit-testable).
+3. **Corroboration** — a claim is only `WEB-VERIFIED` when **≥2 independent, authority-weighted**
+   sources agree (official > established > social; social-only can't clear the bar).
+
+Answers from the guarded pipeline carry a **confidence stamp** and never come back empty:
+
+```text
+✔ GROUNDED         — backed by your notes
+✔ WEB-VERIFIED     — ≥2 independent sources agree (cited)
+⚠ SINGLE SOURCE    — found on the web, one source only (cited)
+⚠ SOURCES CONFLICT — sources disagree; both shown
+⚠ UNVERIFIED       — couldn't back it anywhere (best-effort, flagged)
+```
+
+**How I actually run it:** a Claude Code `UserPromptSubmit` hook (`bin/hook_userpromptsubmit.py`)
+grounds every terminal session against my own notes + wikis — advisory (a hook can't force a
+refusal), silent when nothing relevant matches. **That part is live.** A companion assistant-side
+wrap (it lives in my chief-of-staff repo, not this one) turns the same core into real
+refuse-*teeth* — the returned string *is* the delivered message, with a corrective retry loop and
+labeled fallback; it's built and adversarially reviewed but **not yet activated**.
+Honest v1 limits: retrieval is lexical TF-IDF (swap embeddings behind the same `retrieve()` seam);
+content-level **syndication detection is deferred** (independence is by-publisher for now); the
+`contradicts_local` flag is defined but not yet surfaced.
+
+## Where this sits in the landscape (prior art)
+
+None of the *ideas* here are novel — and a guardrail library shouldn't pretend otherwise. What's
+uncommon is the packaging: a small, readable, **zero-dependency** implementation you can audit in
+one sitting, with an eval harness, rather than a trained model, a heavyweight framework, or a
+hosted service. The lineage:
+
+- **Corrective / Self / Agentic RAG.** "Escalate to the web when local retrieval is weak" is
+  literally the core of **Corrective RAG (CRAG)** ([arXiv 2401.15884](https://arxiv.org/abs/2401.15884));
+  the groundedness self-check echoes **Self-RAG** ([arXiv 2310.11511](https://arxiv.org/abs/2310.11511)).
+  Frameworks operationalize the same loops — **LangGraph agentic RAG**
+  ([docs](https://docs.langchain.com/oss/python/langgraph/agentic-rag)) and **LlamaIndex agentic RAG**.
+- **Guardrails & groundedness eval.** Refuse-when-unsupported and groundedness scoring are commodity:
+  **Guardrails AI** ([repo](https://github.com/guardrails-ai/guardrails)),
+  **NVIDIA NeMo Guardrails** ([repo](https://github.com/NVIDIA-NeMo/Guardrails)),
+  **Amazon Bedrock contextual grounding check**
+  ([docs](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails-contextual-grounding-check.html)),
+  and the eval libraries **RAGAS faithfulness**
+  ([docs](https://docs.ragas.io/en/stable/concepts/metrics/available_metrics/faithfulness/)) and
+  **TruLens** ([RAG triad](https://www.trulens.org/getting_started/core_concepts/rag_triad/)).
+- **Cross-source corroboration** is an *active research area*, not a solved primitive: resolving
+  conflicting evidence with source credibility ([arXiv 2505.17762](https://arxiv.org/abs/2505.17762)),
+  corroborating-and-refuting evidence retrieval ([arXiv 2503.07937](https://arxiv.org/abs/2503.07937)),
+  and multi-source disagreement modeling ([arXiv 2602.18693](https://arxiv.org/abs/2602.18693));
+  consumer answer engines like Perplexity productize cited web answers. rag-guard sits *downstream*
+  of this literature — it packages authority-weighted corroboration as a small guard tier; it does
+  not contribute a new verification method.
+
+**The claim, precisely:** not "I invented self-verifying RAG," but "here's a clean, tested,
+dependency-free implementation of the guardrail patterns, wired into a real workflow, with the
+confidence and limitations labeled honestly."
 
 ## Reliability & security
 
