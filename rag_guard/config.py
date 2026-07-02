@@ -6,6 +6,11 @@ import os
 
 MIN_SCORE = 0.05
 MAX_WEB_SOURCES = 6
+# The hook stays silent unless the top note shares at least this many distinct
+# content-words with the prompt. Raw TF-IDF score alone doesn't separate relevant
+# from tangential (short queries spike on a single shared rare word); requiring
+# >=2 shared content-words is what actually gates noise. See probe in git history.
+HOOK_MIN_OVERLAP = 2
 
 
 def cache_path() -> str:
