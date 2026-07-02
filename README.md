@@ -5,12 +5,20 @@
 | Name                       |    Stmts |     Miss |   Cover |   Missing |
 |--------------------------- | -------: | -------: | ------: | --------: |
 | rag\_guard/\_\_init\_\_.py |        4 |        0 |    100% |           |
+| rag\_guard/cli.py          |       22 |        3 |     86% | 27-28, 32 |
+| rag\_guard/config.py       |       17 |        2 |     88% |     27-28 |
+| rag\_guard/corpus.py       |       44 |        5 |     89% |37-38, 50, 53-54 |
 | rag\_guard/evaluate.py     |       24 |        0 |    100% |           |
 | rag\_guard/guard.py        |       29 |        1 |     97% |        43 |
+| rag\_guard/index.py        |       53 |        7 |     87% |16-18, 33-34, 57-58 |
 | rag\_guard/pipeline.py     |       26 |        0 |    100% |           |
 | rag\_guard/providers.py    |        8 |        0 |    100% |           |
-| rag\_guard/retriever.py    |       35 |        0 |    100% |           |
-| **TOTAL**                  |  **126** |    **1** | **99%** |           |
+| rag\_guard/reindex.py      |       13 |        1 |     92% |        20 |
+| rag\_guard/retriever.py    |       50 |        0 |    100% |           |
+| rag\_guard/service.py      |       15 |        0 |    100% |           |
+| rag\_guard/stamps.py       |       15 |        0 |    100% |           |
+| rag\_guard/webverify.py    |       44 |        0 |    100% |           |
+| **TOTAL**                  |  **364** |   **19** | **95%** |           |
 
 
 ## Setup coverage badge
