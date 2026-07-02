@@ -41,6 +41,7 @@ class Retriever:
         # smoothed idf, always positive
         self.idf = {t: math.log((1 + n) / (1 + d)) + 1.0 for t, d in df.items()}
         self._vecs = [self._vectorize(toks) for toks in token_lists]
+        self._norms = [self._norm(v) for v in self._vecs]
 
     def _vectorize(self, toks: list[str]) -> dict[str, float]:
         tf: dict[str, int] = {}
@@ -49,18 +50,32 @@ class Retriever:
         return {t: c * self.idf.get(t, 0.0) for t, c in tf.items()}
 
     @staticmethod
-    def _cosine(a: dict[str, float], b: dict[str, float]) -> float:
-        common = set(a) & set(b)
-        dot = sum(a[t] * b[t] for t in common)
-        na = math.sqrt(sum(v * v for v in a.values()))
-        nb = math.sqrt(sum(v * v for v in b.values()))
-        return dot / (na * nb) if na and nb else 0.0
+    def _norm(vec):
+        import math
+        return math.sqrt(sum(v * v for v in vec.values()))
 
-    def retrieve(self, query: str, k: int = 3) -> list[dict]:
+    @classmethod
+    def from_index(cls, docs, idf, vecs, norms):
+        self = cls.__new__(cls)
+        self.docs, self.idf, self._vecs, self._norms = docs, idf, vecs, norms
+        return self
+
+    def index_state(self):
+        return {"docs": self.docs, "idf": self.idf, "vecs": self._vecs, "norms": self._norms}
+
+    def retrieve(self, query, k=3):
+        import math
         qv = self._vectorize(_toks(query))
-        scored = [
-            {"id": d["id"], "text": d["text"], "score": round(self._cosine(qv, self._vecs[i]), 6)}
-            for i, d in enumerate(self.docs)
-        ]
+        qn = math.sqrt(sum(v * v for v in qv.values()))
+        scored = []
+        for i, d in enumerate(self.docs):
+            dn = self._norms[i]
+            if qn and dn:
+                common = set(qv) & set(self._vecs[i])
+                score = sum(qv[t] * self._vecs[i][t] for t in common) / (qn * dn)
+            else:
+                score = 0.0
+            score *= d.get("weight", 1.0)
+            scored.append({"id": d["id"], "text": d["text"], "score": round(score, 6)})
         scored.sort(key=lambda h: h["score"], reverse=True)
         return scored[:k]

@@ -45,5 +45,28 @@ class RetrieverTests(unittest.TestCase):
         self.assertEqual(scores, sorted(scores, reverse=True))
 
 
+from rag_guard.retriever import Retriever
+
+
+def test_from_index_bypasses_rebuild_and_matches():
+    docs = [{"id": "a", "text": "shipping takes three days"},
+            {"id": "b", "text": "returns within thirty days"}]
+    built = Retriever(docs)
+    loaded = Retriever.from_index(**built.index_state())
+    assert loaded.retrieve("shipping") == built.retrieve("shipping")
+
+
+def test_norms_precomputed_positive():
+    r = Retriever([{"id": "a", "text": "hello world"}, {"id": "b", "text": "other text"}])
+    assert r._norms[0] > 0
+
+
+def test_weight_breaks_ties_toward_memory():
+    docs = [{"id": "wiki", "text": "shipping policy details", "weight": 1.0},
+            {"id": "mem", "text": "shipping policy details", "weight": 1.15}]
+    top = Retriever(docs).retrieve("shipping policy details", k=1)[0]
+    assert top["id"] == "mem"
+
+
 if __name__ == "__main__":
     unittest.main()
