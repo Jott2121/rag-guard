@@ -10,6 +10,8 @@
 
 The failure mode of RAG isn't bad retrieval. It's the confident answer with *nothing behind it*. `rag-guard` is a small, runnable pipeline that makes that hard: it refuses when retrieval finds no support, checks the answer against the context, redacts PII from the output, and traces every step. Pure-stdlib core, **zero runtime dependencies**, bring your own model.
 
+**Why not LangChain or guardrails-ai?** Because this isn't a framework to adopt — it's a small, readable pipeline you drop behind any model, and its one guarantee is that it refuses *before* the model is ever called, with a published eval that puts a number on how often it gets that right.
+
 > 🧩 One layer of a five-repo [**cost-governance stack**](https://github.com/Jott2121/bow#the-system-a-cost-governance-stack) for operating AI agents cost-efficiently; [bow](https://github.com/Jott2121/bow) is the flagship that operates the stack in production.
 
 ```text
