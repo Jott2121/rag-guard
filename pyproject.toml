@@ -43,3 +43,8 @@ testpaths = ["tests"]
 source = ["rag_guard"]
 # relative_files lets the coverage-comment action resolve paths from a checkout
 relative_files = true
+
+[tool.mutmut]
+source_paths = ["rag_guard/guard.py"]
+also_copy = ["rag_guard"]
+pytest_add_cli_args_test_selection = ["--ignore=tests/test_hook.py"]
