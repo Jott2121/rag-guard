@@ -15,6 +15,7 @@ from rag_guard import config
 from rag_guard.corpus import build_corpus
 from rag_guard.index import fingerprint as corpus_fingerprint, save_index
 from rag_guard.retriever import Retriever
+from rag_guard import rebuild_health
 from rag_guard.sqlite_index import SqliteIndex
 
 
@@ -56,9 +57,17 @@ def main(argv=None):
     ap.add_argument("--json-cache", default=None)
     args = ap.parse_args(argv)
     backends = tuple(b.strip() for b in args.backends.split(",") if b.strip())
+    cache = args.sqlite_cache or config.sqlite_cache_path()
     try:
-        return reindex(backends=backends, sqlite_cache=args.sqlite_cache,
-                       json_cache=args.json_cache)
+        count = reindex(backends=backends, sqlite_cache=args.sqlite_cache,
+                        json_cache=args.json_cache)
+        # This process is detached with stderr to DEVNULL, so a traceback goes nowhere.
+        # The marker is the only place a caller can learn the rebuild is broken.
+        rebuild_health.record_success(cache, chunks=count)
+        return count
+    except Exception as exc:
+        rebuild_health.record_failure(cache, f"{type(exc).__name__}: {exc}")
+        return 1
     finally:
         # The background path claims a lock before spawning us; release it whether the
         # rebuild succeeded or died, or staleness wedges until the lock ages out.

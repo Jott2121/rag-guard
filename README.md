@@ -169,6 +169,14 @@ softened to match measured reality — retrieval is keyword-based and fires on ~
 with 38.5% relevance, so it tells the model the notes may be unrelated, partial or slightly
 stale and to check before relying on them, rather than to "prefer" them unconditionally.
 
+**Rebuild health.** Serving a stale index is a deliberate trade, and it holds only while the
+staleness is bounded and observable. The detached rebuild's stderr goes to `DEVNULL` (its
+parent's stdout is a hook response channel), so a rebuild that fails *every* time would
+otherwise be unbounded staleness that nothing ever mentions. `rebuild_health.py` records
+ok/fail beside the cache and the hook appends one line to the injected block after two
+consecutive failures or six hours without a successful rebuild — and stays silent otherwise,
+because a caveat on every prompt is noise and noise is how a real warning gets ignored.
+
 **Instrumentation.** A grounding hook that fires on most prompts is easy to tune by vibes.
 `hooklog.py` records every decision — fires *and* silent ones with the reason they were
 silent, since underfiring leaves no other trace — and `bin/hook_report.py` joins those

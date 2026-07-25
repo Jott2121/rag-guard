@@ -13,7 +13,7 @@ import os
 import sys
 import time
 
-from rag_guard import config, hooklog, service
+from rag_guard import config, hooklog, rebuild_health, service
 from rag_guard.retriever import _toks
 
 # Empirically verified against Claude Code 2.1.219: an interactive terminal session
@@ -45,11 +45,9 @@ def is_interactive(env=None) -> bool:
 # the index may be seconds-to-minutes behind on purpose (serve-stale), so both caveats are
 # stated rather than implied.
 _PROTOCOL = (
-    "GROUNDING PROTOCOL: The notes above were keyword-retrieved and may be unrelated, "
-    "partial, or slightly out of date. Check that a passage actually addresses the question "
-    "before relying on it, and say so if none do. Where they do apply, prefer them over "
-    "recollection and cite the note id (ids are vault-qualified, e.g. Hunt-621-Wiki/Note.md). "
-    "If the question isn't covered and may postdate your training, search the web, "
+    "GROUNDING PROTOCOL: retrieved by lexical similarity; may be irrelevant. Cite the "
+    "vault-qualified note id for anything you use (e.g. Hunt-621-Wiki/Note.md). If the "
+    "notes don't cover the question and it may postdate your training, search the web, "
     "corroborate across >=2 independent sources (prefer primary/official over social), cite "
     "them, and flag conflicts with the notes. State the answer's confidence: "
     "grounded / web-verified / single-source / unverified."
@@ -69,7 +67,20 @@ def build_output(prompt, hits, support, env=None):
     else:
         passages = "\n".join(f"- ({h['id']}) {h['text']}" for h in hits)
         ctx = f"Relevant notes from Jeff's knowledge base:\n{passages}\n\n{_PROTOCOL}"
+        # Only appended when rebuilds are genuinely broken or very overdue. The index is
+        # served stale by design, so without this a permanently-failing rebuild would be
+        # unbounded staleness that nothing ever mentions.
+        alert = _rebuild_warning()
+        if alert:
+            ctx = f"{ctx}\n{alert}"
     return {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": ctx}}
+
+
+def _rebuild_warning():
+    try:
+        return rebuild_health.warning(config.sqlite_cache_path())
+    except Exception:
+        return None
 
 
 def decide(prompt, hits, support):
