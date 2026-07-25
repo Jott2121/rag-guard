@@ -38,11 +38,20 @@ def is_interactive(env=None) -> bool:
         return False
     return env.get("CLAUDE_CODE_ENTRYPOINT", "") in INTERACTIVE_ENTRYPOINTS
 
+# Softened deliberately. Retrieval is keyword-based and fires on ~81% of prompts; measured
+# relevance is 38.5%, so roughly three in five injections do not cover the question. Telling
+# the model to "prefer the notes above" unconditionally is an instruction to trust
+# possibly-irrelevant context. The ids are vault-qualified so a passage can be traced, and
+# the index may be seconds-to-minutes behind on purpose (serve-stale), so both caveats are
+# stated rather than implied.
 _PROTOCOL = (
-    "GROUNDING PROTOCOL: Prefer the notes above. If they don't cover the question and it "
-    "may be newer than your training cutoff, search the web, corroborate the claim across "
-    ">=2 independent sources (prefer primary/official over social), cite them, and flag "
-    "conflicts or anything contradicting Jeff's notes. State the answer's confidence: "
+    "GROUNDING PROTOCOL: The notes above were keyword-retrieved and may be unrelated, "
+    "partial, or slightly out of date. Check that a passage actually addresses the question "
+    "before relying on it, and say so if none do. Where they do apply, prefer them over "
+    "recollection and cite the note id (ids are vault-qualified, e.g. Hunt-621-Wiki/Note.md). "
+    "If the question isn't covered and may postdate your training, search the web, "
+    "corroborate across >=2 independent sources (prefer primary/official over social), cite "
+    "them, and flag conflicts with the notes. State the answer's confidence: "
     "grounded / web-verified / single-source / unverified."
 )
 
@@ -95,13 +104,12 @@ def _log(payload, *, fired, reason, hits=(), support=0.0, elapsed_ms=0, prompt=N
 
 
 def _resolve(chunk_id):
-    """Chunk ids are root-relative and 39% of basenames collide across vaults, so resolve
-    to an absolute path at log time — otherwise the analysis cannot tell which vault a
-    passage came from (the same ambiguity the injected citations have)."""
+    """Chunk id -> absolute path. Ids are vault-qualified and relative to the PARENT of
+    each root (see corpus._add_file), so join against that same base."""
     rel = chunk_id.split("#")[0]
     for root in config.default_roots():
-        base = root if os.path.isdir(root) else os.path.dirname(root)
-        candidate = os.path.join(base, rel)
+        root_dir = root if os.path.isdir(root) else os.path.dirname(root)
+        candidate = os.path.join(os.path.dirname(root_dir), rel)
         if os.path.exists(candidate):
             return candidate
     return None

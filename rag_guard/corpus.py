@@ -52,7 +52,12 @@ def _add_file(path, source, docs, chunk_chars, overlap, exclude_suffixes):
         text = open(path, encoding="utf-8", errors="ignore").read()
     except OSError:
         return
-    base = source if os.path.isdir(source) else os.path.dirname(source)
+    # Qualify the id with the root's own name: the PARENT of the root is the base, so a
+    # note in ~/Documents/Hunt-621-Wiki gets "Hunt-621-Wiki/00-Index.md" rather than a bare
+    # "00-Index.md". 39% of files in the live corpus share a basename across vaults, so an
+    # unqualified id is an uncitable citation.
+    root_dir = source if os.path.isdir(source) else os.path.dirname(source)
+    base = os.path.dirname(root_dir)
     rel = os.path.relpath(path, base)
     weight = _weight_for(path)
     for i, chunk in enumerate(chunk_text(text, chunk_chars=chunk_chars, overlap=overlap)):

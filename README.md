@@ -161,6 +161,14 @@ force a refusal), silent when nothing relevant matches. **That part is live.**
 > non-interactive caller back in — deliberately explicit, because opting in to contamination
 > should be a visible act. See `tests/test_hook_isolation.py`.
 
+**Provenance.** Chunk ids are qualified by their corpus root, so a citation reads
+`Hunt-621-Wiki/00-Index.md#3` rather than a bare `00-Index.md#3`. On a multi-vault corpus
+that is not cosmetic: 226 of 586 notes here share a basename (`CLAUDE.md` appears 14 times),
+so an unqualified id is an uncitable citation. The injected protocol is deliberately
+softened to match measured reality — retrieval is keyword-based and fires on ~81% of prompts
+with 38.5% relevance, so it tells the model the notes may be unrelated, partial or slightly
+stale and to check before relying on them, rather than to "prefer" them unconditionally.
+
 **Instrumentation.** A grounding hook that fires on most prompts is easy to tune by vibes.
 `hooklog.py` records every decision — fires *and* silent ones with the reason they were
 silent, since underfiring leaves no other trace — and `bin/hook_report.py` joins those
