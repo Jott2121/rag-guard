@@ -2,23 +2,26 @@
 
 [Full report](https://htmlpreview.github.io/?https://github.com/Jott2121/rag-guard/blob/python-coverage-comment-action-data/htmlcov/index.html)
 
-| Name                       |    Stmts |     Miss |   Cover |   Missing |
-|--------------------------- | -------: | -------: | ------: | --------: |
-| rag\_guard/\_\_init\_\_.py |        4 |        0 |    100% |           |
-| rag\_guard/cli.py          |       22 |        3 |     86% | 27-28, 32 |
-| rag\_guard/config.py       |       17 |        2 |     88% |     27-28 |
-| rag\_guard/corpus.py       |       44 |        5 |     89% |37-38, 50, 53-54 |
-| rag\_guard/evaluate.py     |       24 |        0 |    100% |           |
-| rag\_guard/guard.py        |       29 |        1 |     97% |        43 |
-| rag\_guard/index.py        |       53 |        7 |     87% |16-18, 33-34, 57-58 |
-| rag\_guard/pipeline.py     |       26 |        0 |    100% |           |
-| rag\_guard/providers.py    |        8 |        0 |    100% |           |
-| rag\_guard/reindex.py      |       13 |        1 |     92% |        20 |
-| rag\_guard/retriever.py    |       50 |        0 |    100% |           |
-| rag\_guard/service.py      |       15 |        0 |    100% |           |
-| rag\_guard/stamps.py       |       15 |        0 |    100% |           |
-| rag\_guard/webverify.py    |       44 |        0 |    100% |           |
-| **TOTAL**                  |  **364** |   **19** | **95%** |           |
+| Name                          |    Stmts |     Miss |   Cover |   Missing |
+|------------------------------ | -------: | -------: | ------: | --------: |
+| rag\_guard/\_\_init\_\_.py    |        4 |        0 |    100% |           |
+| rag\_guard/cli.py             |       22 |        3 |     86% | 27-28, 32 |
+| rag\_guard/config.py          |       25 |        5 |     80% |29-31, 45-46 |
+| rag\_guard/corpus.py          |       45 |        3 |     93% | 50, 53-54 |
+| rag\_guard/evaluate.py        |       24 |        0 |    100% |           |
+| rag\_guard/guard.py           |       29 |        0 |    100% |           |
+| rag\_guard/hooklog.py         |       45 |        0 |    100% |           |
+| rag\_guard/index.py           |       54 |        7 |     87% |16-18, 39-40, 63-64 |
+| rag\_guard/pipeline.py        |       26 |        0 |    100% |           |
+| rag\_guard/providers.py       |        8 |        0 |    100% |           |
+| rag\_guard/rebuild\_health.py |       46 |        0 |    100% |           |
+| rag\_guard/reindex.py         |       45 |        3 |     93% | 76-77, 81 |
+| rag\_guard/retriever.py       |       50 |        0 |    100% |           |
+| rag\_guard/service.py         |       22 |        1 |     95% |        48 |
+| rag\_guard/sqlite\_index.py   |      164 |       13 |     92% |52, 115-116, 206-207, 209-210, 214-217, 240-241 |
+| rag\_guard/stamps.py          |       15 |        0 |    100% |           |
+| rag\_guard/webverify.py       |       44 |        0 |    100% |           |
+| **TOTAL**                     |  **668** |   **35** | **95%** |           |
 
 
 ## Setup coverage badge
