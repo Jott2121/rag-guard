@@ -20,6 +20,9 @@ from __future__ import annotations
 import math
 import os
 import sqlite3
+import subprocess
+import sys
+import time
 
 from rag_guard.corpus import build_corpus
 from rag_guard.index import fingerprint as corpus_fingerprint
@@ -182,13 +185,86 @@ class SqliteIndex:
         return out
 
 
+LOCK_STALE_SECONDS = 300
+
+
+def _claim_rebuild_lock(cache_path: str) -> bool:
+    """One rebuild at a time. Every prompt sees the same stale index, so without this
+    every prompt would spawn its own 15s rebuild."""
+    lock = cache_path + ".rebuild.lock"
+    try:
+        fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        os.write(fd, str(os.getpid()).encode())
+        os.close(fd)
+        return True
+    except FileExistsError:
+        try:
+            # A rebuild that was killed must not wedge staleness forever.
+            if time.time() - os.path.getmtime(lock) > LOCK_STALE_SECONDS:
+                os.remove(lock)
+                return _claim_rebuild_lock(cache_path)
+        except OSError:
+            pass
+        return False
+    except OSError:
+        return False
+
+
+def release_rebuild_lock(cache_path: str) -> None:
+    try:
+        os.remove(cache_path + ".rebuild.lock")
+    except OSError:
+        pass
+
+
+def _spawn_rebuild(cache_path: str, roots_env: str | None = None) -> None:
+    """Detached sqlite-only rebuild.
+
+    stdout is closed off deliberately: this runs inside a hook whose stdout IS its
+    response to Claude Code, and any byte a child writes there corrupts that contract.
+    start_new_session detaches it so it survives the hook exiting and never becomes the
+    caller's zombie."""
+    env = dict(os.environ)
+    pkg_parent = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    env["PYTHONPATH"] = os.pathsep.join(
+        [pkg_parent] + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
+    env["RAG_GUARD_LOCK_HELD"] = cache_path
+    if roots_env:
+        env["RAG_GUARD_ROOTS"] = roots_env
+    try:
+        subprocess.Popen(
+            [sys.executable, "-m", "rag_guard.reindex", "--backends", "sqlite",
+             "--sqlite-cache", cache_path],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True, env=env, close_fds=True)
+    except Exception:
+        release_rebuild_lock(cache_path)
+
+
 def get_sqlite_index(cache_path: str, roots: list[str], *,
-                     chunk_chars: int = 800, overlap: int = 100) -> SqliteIndex:
-    """Return a current index, rebuilding only when the corpus fingerprint moved."""
+                     chunk_chars: int = 800, overlap: int = 100,
+                     serve_stale: bool = False, spawn=None,
+                     roots_env: str | None = None) -> SqliteIndex:
+    """Return an index for `roots`, rebuilding when the corpus fingerprint moved.
+
+    With serve_stale, a stale-but-readable index is returned IMMEDIATELY and the rebuild
+    happens in a detached process. Rebuild cost is global (idf is corpus-wide, so one
+    edited note invalidates every vector) and measured at 12-16s on the live vault, which
+    otherwise lands inline on the next prompt after any note is written.
+
+    Staleness is safe here in a way it would not be in a cache with correctness duties:
+    retrieval is advisory, and one prompt grounded on a slightly older corpus is strictly
+    better than a human waiting 15 seconds. A CORRUPT index is not served stale -- it has
+    no fingerprint, so there is nothing trustworthy to serve.
+    """
     index = SqliteIndex(cache_path)
     current = corpus_fingerprint(roots, chunk_chars=chunk_chars, overlap=overlap)
-    # A corrupt or truncated db reports no fingerprint, so it rebuilds rather than
-    # serving garbage -- the hook's fail-open promise depends on that.
-    if index.fingerprint() != current:
-        index.build(build_corpus(roots, chunk_chars=chunk_chars, overlap=overlap), current)
+    existing = index.fingerprint()
+    if existing == current:
+        return index
+    if serve_stale and existing is not None:
+        if _claim_rebuild_lock(cache_path):
+            (spawn or (lambda _: _spawn_rebuild(cache_path, roots_env)))(cache_path)
+        return index
+    index.build(build_corpus(roots, chunk_chars=chunk_chars, overlap=overlap), current)
     return index

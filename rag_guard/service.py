@@ -28,13 +28,22 @@ def _use_sqlite() -> bool:
     return os.environ.get("RAG_GUARD_BACKEND", "sqlite").lower() != "json"
 
 
+def _serve_stale() -> bool:
+    """On by default. A rebuild is global and costs 12-16s; paying that inline means a
+    human waits 15s for the next prompt after saving any note. Grounding is advisory, so
+    one prompt against a slightly older corpus is the strictly better trade.
+    RAG_GUARD_SERVE_STALE=0 restores blocking rebuilds."""
+    return os.environ.get("RAG_GUARD_SERVE_STALE", "1") != "0"
+
+
 def query(text, k=5, *, roots=None, cache=None) -> list[dict]:
     global _SINGLETON, _FP
     roots = roots or config.default_roots()
     fp = fingerprint(roots)
     if _SINGLETON is None or _FP != fp:
         if _use_sqlite():
-            _SINGLETON = get_sqlite_index(cache or config.sqlite_cache_path(), roots)
+            _SINGLETON = get_sqlite_index(cache or config.sqlite_cache_path(), roots,
+                                          serve_stale=_serve_stale())
         else:
             _SINGLETON = get_index(cache or config.cache_path(), roots)
         _FP = fp

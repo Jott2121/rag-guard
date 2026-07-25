@@ -12,36 +12,61 @@ from __future__ import annotations
 import os
 
 from rag_guard import config
-from rag_guard.index import get_index
-from rag_guard.sqlite_index import get_sqlite_index
+from rag_guard.corpus import build_corpus
+from rag_guard.index import fingerprint as corpus_fingerprint, save_index
+from rag_guard.retriever import Retriever
+from rag_guard.sqlite_index import SqliteIndex
 
 
-def _drop(path) -> None:
-    try:
-        os.remove(path)
-    except OSError:
-        pass
+def reindex(*, backends=("sqlite", "json"), sqlite_cache=None, json_cache=None) -> int:
+    """Rebuild the requested caches from scratch. Returns the chunk count.
 
+    Cache paths are explicit parameters, not just config defaults: the background rebuild
+    must target the SAME cache its caller is serving from, or it refreshes a different
+    file and the caller stays stale forever.
 
-def reindex(*, backends=("sqlite", "json")) -> int:
-    """Rebuild the requested caches from scratch. Returns the chunk count."""
+    NEVER deletes the existing cache first. An earlier version did, and it opened a
+    ~20-second window where the file was absent: a hook arriving mid-rebuild found no
+    index to serve stale, so it fell back to a blocking rebuild of its own -- turning the
+    stall this was built to remove into a worse one. Both backends already write to a temp
+    file and rename, so a forced rebuild is atomic without any unlink.
+    """
     roots = config.default_roots()
+    current = corpus_fingerprint(roots)
     count = 0
     if "json" in backends:
-        cache = config.cache_path()
-        _drop(cache)
-        count = len(get_index(cache, roots).docs)
+        cache = json_cache or config.cache_path()
+        retriever = Retriever(build_corpus(roots))
+        save_index(retriever, current, cache)
+        count = len(retriever.docs)
     if "sqlite" in backends:
-        cache = config.sqlite_cache_path()
-        _drop(cache)
-        con = get_sqlite_index(cache, roots)._connect()
-        if con is not None:
-            try:
-                count = con.execute("SELECT COUNT(*) FROM docs").fetchone()[0] or count
-            finally:
-                con.close()
+        cache = sqlite_cache or config.sqlite_cache_path()
+        docs = build_corpus(roots)
+        SqliteIndex(cache).build(docs, current)
+        count = len(docs) or count
     return count
 
 
+def main(argv=None):
+    import argparse
+    ap = argparse.ArgumentParser(description="Rebuild the rag-guard index caches.")
+    ap.add_argument("--backends", default="sqlite,json",
+                    help="comma-separated: sqlite, json (default both)")
+    ap.add_argument("--sqlite-cache", default=None)
+    ap.add_argument("--json-cache", default=None)
+    args = ap.parse_args(argv)
+    backends = tuple(b.strip() for b in args.backends.split(",") if b.strip())
+    try:
+        return reindex(backends=backends, sqlite_cache=args.sqlite_cache,
+                       json_cache=args.json_cache)
+    finally:
+        # The background path claims a lock before spawning us; release it whether the
+        # rebuild succeeded or died, or staleness wedges until the lock ages out.
+        held = os.environ.get("RAG_GUARD_LOCK_HELD")
+        if held:
+            from rag_guard.sqlite_index import release_rebuild_lock
+            release_rebuild_lock(held)
+
+
 if __name__ == "__main__":
-    print(reindex())
+    print(main())
