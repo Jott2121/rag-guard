@@ -23,9 +23,15 @@ def _walk_md(root):
                 yield os.path.join(dp, name)
 
 
+# Bump when the shape of a chunk id or its text changes. A cached index whose ids are in
+# an old format is not "current" no matter what the corpus mtimes say, and without this in
+# the fingerprint it would keep being served.
+CORPUS_SCHEMA = 2
+
+
 def fingerprint(roots, *, chunk_chars=800, overlap=100) -> str:
     h = hashlib.sha256()
-    h.update(f"{chunk_chars}:{overlap}:".encode())
+    h.update(f"v{CORPUS_SCHEMA}:{chunk_chars}:{overlap}:".encode())
     for root in sorted(roots):
         for path in _walk_md(root):
             try:
