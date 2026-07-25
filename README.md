@@ -161,6 +161,16 @@ force a refusal), silent when nothing relevant matches. **That part is live.**
 > non-interactive caller back in — deliberately explicit, because opting in to contamination
 > should be a visible act. See `tests/test_hook_isolation.py`.
 
+**Instrumentation.** A grounding hook that fires on most prompts is easy to tune by vibes.
+`hooklog.py` records every decision — fires *and* silent ones with the reason they were
+silent, since underfiring leaves no other trace — and `bin/hook_report.py` joins those
+records against Claude Code session transcripts to ask whether injected notes were
+subsequently opened. Opt-in (`RAG_GUARD_HOOK_LOG=1`), append-only, 0600, size-capped, and
+fail-silent: instrumentation must never be able to break the thing it instruments. Read the
+result as a *lower bound on relevance*, not a usage rate — an untouched injection is either
+noise or an injection good enough that no read was needed, and one number cannot separate
+those.
+
 **Index backends.** `index.py` stores one forward vector per chunk in JSON, so answering a
 5-term query means deserializing *every* vector: on my 10,926-chunk vault that is 2.2s of a 2.6s
 hook, paid in a cold process on every prompt. `sqlite_index.py` stores an inverted index instead

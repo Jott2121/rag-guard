@@ -23,6 +23,14 @@ def cache_path() -> str:
     return os.path.join(_cache_dir(), "index.json")
 
 
+def hook_log_path() -> str:
+    """Observability log for the hook. Lives in state, not cache: cache dirs get wiped
+    and this is the only record of what the hook actually did."""
+    base = os.path.expanduser("~/.local/state/rag-guard")
+    os.makedirs(base, exist_ok=True)
+    return os.path.join(base, "hook-fires.jsonl")
+
+
 def sqlite_cache_path() -> str:
     """Inverted-index cache. Separate file from index.json so the two backends can
     coexist and RAG_GUARD_BACKEND=json stays an instant rollback."""

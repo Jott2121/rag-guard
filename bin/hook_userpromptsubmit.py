@@ -11,8 +11,9 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 
-from rag_guard import config, service
+from rag_guard import config, hooklog, service
 from rag_guard.retriever import _toks
 
 # Empirically verified against Claude Code 2.1.219: an interactive terminal session
@@ -62,16 +63,68 @@ def build_output(prompt, hits, support, env=None):
     return {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": ctx}}
 
 
+def decide(prompt, hits, support):
+    """Why the hook did what it did — the shape the log needs, and the reason build_output
+    can stay a pure formatter."""
+    if not hits:
+        return False, "no_hits"
+    if support < config.MIN_SCORE:
+        return False, "below_min_score"
+    if _top_overlap(prompt, hits) < config.HOOK_MIN_OVERLAP:
+        return False, "below_min_overlap"
+    return True, "fired"
+
+
+def _log(payload, *, fired, reason, hits=(), support=0.0, elapsed_ms=0, prompt=None):
+    """Record what happened. Silent decisions are logged too: underfiring leaves no other
+    trace, and 'the session just proceeded ungrounded' is invisible without this."""
+    hooklog.log_event({
+        "session_id": payload.get("session_id"),
+        "cwd": payload.get("cwd"),
+        "entrypoint": os.environ.get("CLAUDE_CODE_ENTRYPOINT"),
+        # Suppressed headless calls log NO prompt: those are the eval/judge payloads the
+        # isolation guard exists to keep at arm's length.
+        "prompt": (prompt or "")[:500] if prompt is not None else None,
+        "fired": fired,
+        "reason": reason,
+        "support": round(support, 6),
+        "elapsed_ms": elapsed_ms,
+        "chunks": [{"id": h["id"], "path": _resolve(h["id"]), "score": h["score"],
+                    "chars": len(h["text"])} for h in hits],
+    }, path=config.hook_log_path())
+
+
+def _resolve(chunk_id):
+    """Chunk ids are root-relative and 39% of basenames collide across vaults, so resolve
+    to an absolute path at log time — otherwise the analysis cannot tell which vault a
+    passage came from (the same ambiguity the injected citations have)."""
+    rel = chunk_id.split("#")[0]
+    for root in config.default_roots():
+        base = root if os.path.isdir(root) else os.path.dirname(root)
+        candidate = os.path.join(base, rel)
+        if os.path.exists(candidate):
+            return candidate
+    return None
+
+
 def main():
+    payload = {}
     try:
         payload = json.load(sys.stdin)
         if not is_interactive():
             # Short-circuit: skip retrieval entirely rather than retrieve-then-discard.
             print(json.dumps(build_output("", [], 0.0, env={})))
+            _log(payload, fired=False, reason="not_interactive", prompt=None)
             sys.exit(0)
-        hits = service.query(payload.get("prompt", ""), 5)
+        prompt = payload.get("prompt", "")
+        started = time.perf_counter()
+        hits = service.query(prompt, 5)
         support = max((h["score"] for h in hits), default=0.0)
-        print(json.dumps(build_output(payload.get("prompt", ""), hits, support)))
+        print(json.dumps(build_output(prompt, hits, support)))
+        fired, reason = decide(prompt, hits, support)
+        _log(payload, fired=fired, reason=reason, hits=hits if fired else [],
+             support=support, prompt=prompt,
+             elapsed_ms=int((time.perf_counter() - started) * 1000))
     except Exception:
         pass  # fail-open
     sys.exit(0)
