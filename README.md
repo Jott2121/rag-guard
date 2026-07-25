@@ -147,8 +147,28 @@ Answers from the guarded pipeline carry a **confidence stamp** and never come ba
 ```
 
 **How I actually run it:** a Claude Code `UserPromptSubmit` hook (`bin/hook_userpromptsubmit.py`)
-grounds every terminal session against my own notes + wikis — advisory (a hook can't force a
-refusal), silent when nothing relevant matches. **That part is live.** A companion assistant-side
+grounds every *interactive* terminal session against my own notes + wikis — advisory (a hook can't
+force a refusal), silent when nothing relevant matches. **That part is live.**
+
+> **Isolation — read this before wiring the hook into anything automated.** A grounding hook fires
+> on *every* prompt, including the ones your own eval harness sends. This hook once injected
+> knowledge-base passages into headless `claude -p` judge calls during a mutation-testing
+> experiment; it was caught only because a canary string had been published into the indexed
+> corpus and the judge quoted it back, and 535 verdicts had to be re-judged. So the injection
+> decision now **fails closed**: the hook grounds only on entrypoints where a human is reading
+> (`cli`, `vscode`, `jetbrains`) and stays silent everywhere else, including `claude -p`
+> (`sdk-cli`). Error handling is still fail-open. Set `RAG_GUARD_ALLOW_HEADLESS=1` to opt a
+> non-interactive caller back in — deliberately explicit, because opting in to contamination
+> should be a visible act. See `tests/test_hook_isolation.py`.
+
+**Index backends.** `index.py` stores one forward vector per chunk in JSON, so answering a
+5-term query means deserializing *every* vector: on my 10,926-chunk vault that is 2.2s of a 2.6s
+hook, paid in a cold process on every prompt. `sqlite_index.py` stores an inverted index instead
+(term → postings), so a query reads only the rows for its own terms — same corpus, same top-5 in
+the same order on 79 real prompts, **~0.35s instead of ~3.9s end-to-end**. sqlite is the default;
+`RAG_GUARD_BACKEND=json` rolls back. Rebuild cost is unchanged and still global (idf is corpus-wide,
+so one edited note invalidates every vector) — run `python -m rag_guard.reindex` on a schedule to
+keep that off the interactive path. A companion assistant-side
 wrap (it lives in my chief-of-staff repo, not this one) turns the same core into real
 refuse-*teeth* — the returned string *is* the delivered message, with a corrective retry loop and
 labeled fallback; it's built and adversarially reviewed but **not yet activated**.

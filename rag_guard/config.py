@@ -13,10 +13,20 @@ MAX_WEB_SOURCES = 6
 HOOK_MIN_OVERLAP = 2
 
 
-def cache_path() -> str:
+def _cache_dir() -> str:
     base = os.path.expanduser("~/.cache/rag-guard")
     os.makedirs(base, exist_ok=True)
-    return os.path.join(base, "index.json")
+    return base
+
+
+def cache_path() -> str:
+    return os.path.join(_cache_dir(), "index.json")
+
+
+def sqlite_cache_path() -> str:
+    """Inverted-index cache. Separate file from index.json so the two backends can
+    coexist and RAG_GUARD_BACKEND=json stays an instant rollback."""
+    return os.path.join(_cache_dir(), "index.sqlite")
 
 
 def default_roots() -> list[str]:
