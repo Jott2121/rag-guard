@@ -1,4 +1,4 @@
-"""Shell-guard decisions: rebasing pulls, blank commands, invalid JSON."""
+"""Shell-guard decisions: rebasing pulls, rewrite flags, blank commands."""
 import json
 import subprocess
 import unittest
@@ -32,6 +32,25 @@ class GuardShellTests(unittest.TestCase):
         hooks = json.loads(HOOKS.read_text())
         matcher = hooks["hooks"]["beforeShellExecution"][0]["matcher"]
         self.assertIn("git pull", matcher.split("|"))
+
+    def test_rewrite_flags_are_denied_away_from_the_subcommand(self):
+        denied = [
+            "git push origin --force",
+            "git push origin -f",
+            "git push -fu origin",
+            "git push --force",
+            "git push --force-with-lease origin",
+            "git reset HEAD --hard",
+            "git reset --hard HEAD",
+        ]
+        for command in denied:
+            got = decision(json.dumps({"command": command}))
+            self.assertEqual(got["permission"], "deny", command)
+        asked = decision(json.dumps({"command": "git push -u origin main"}))
+        self.assertEqual(asked["permission"], "ask")
+        for command in ("git reset HEAD", "git reset --soft HEAD"):
+            got = decision(json.dumps({"command": command}))
+            self.assertEqual(got["permission"], "allow", command)
 
     def test_plain_pull_is_allowed_and_rebase_pull_is_denied(self):
         allowed = decision(json.dumps({"command": "git pull origin main"}))
