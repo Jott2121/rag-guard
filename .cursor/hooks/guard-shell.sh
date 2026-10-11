@@ -4,8 +4,21 @@
 set -euo pipefail
 input="$(cat)"
 cmd="$(printf '%s' "$input" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("command",""))')"
-deny() { printf '{"permission":"deny","user_message":"%s","agent_message":"%s Open a PR instead; a human will do this step."}\n' "$1" "$1"; exit 0; }
-ask()  { printf '{"permission":"ask","user_message":"%s"}\n' "$1"; exit 0; }
+# json.dumps so a command with quotes, backslashes, or newlines stays valid JSON.
+json_msg() {
+  python3 - "$1" "$2" "$3" <<'PY'
+import json, sys
+perm, user, agent = sys.argv[1], sys.argv[2], sys.argv[3]
+payload = {"permission": perm}
+if user:
+    payload["user_message"] = user
+if agent:
+    payload["agent_message"] = agent
+sys.stdout.write(json.dumps(payload) + "\n")
+PY
+}
+deny() { json_msg deny "$1" "$1 Open a PR instead; a human will do this step."; exit 0; }
+ask()  { json_msg ask "$1" ""; exit 0; }
 case "$cmd" in
   *"push --force"*|*"push -f"*|*"--force-with-lease"*) deny "Force-push blocked by repo policy." ;;
   *"reset --hard"*|*"rebase"*)                        deny "History rewrite blocked by repo policy." ;;
@@ -15,4 +28,4 @@ case "$cmd" in
   *"git push"*)                                       ask  "Agent wants to push a branch. Allow?" ;;
   *"curl"*|*"wget"*)                                  ask  "Agent wants network access: $cmd" ;;
 esac
-printf '{"permission":"allow"}\n'
+json_msg allow "" ""
