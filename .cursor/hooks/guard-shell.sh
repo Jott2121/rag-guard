@@ -3,7 +3,24 @@
 # Denies irreversible / publishing commands; asks on network fetches. Fails closed (hooks.json failClosed: true).
 set -euo pipefail
 input="$(cat)"
-cmd="$(printf '%s' "$input" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("command",""))')"
+# Exit 2: well-formed payload, but command is missing, blank, or not a string.
+# Any other non-zero status (invalid JSON, non-object) stays non-zero so failClosed denies.
+set +e
+cmd="$(printf '%s' "$input" | python3 -c '
+import json, sys
+try:
+    data = json.load(sys.stdin)
+except json.JSONDecodeError:
+    sys.exit(1)
+if not isinstance(data, dict):
+    sys.exit(1)
+cmd = data.get("command", None)
+if not isinstance(cmd, str) or not cmd.strip():
+    sys.exit(2)
+sys.stdout.write(cmd)
+')"
+parse_status=$?
+set -e
 # json.dumps so a command with quotes, backslashes, or newlines stays valid JSON.
 json_msg() {
   python3 - "$1" "$2" "$3" <<'PY'
@@ -19,6 +36,12 @@ PY
 }
 deny() { json_msg deny "$1" "$1 Open a PR instead; a human will do this step."; exit 0; }
 ask()  { json_msg ask "$1" ""; exit 0; }
+if [ "$parse_status" -eq 2 ]; then
+  deny "Shell guard blocked a missing command."
+fi
+if [ "$parse_status" -ne 0 ]; then
+  exit "$parse_status"
+fi
 case "$cmd" in
   *"push --force"*|*"push -f"*|*"--force-with-lease"*) deny "Force-push blocked by repo policy." ;;
   *"reset --hard"*|*"rebase"*)                        deny "History rewrite blocked by repo policy." ;;
