@@ -44,3 +44,38 @@ jobs:
         uses: py-cov-action/python-coverage-comment-action@cc6cde2639ed103404ce0da9e75114ae9561e691 # v3
         with:
           GITHUB_TOKEN: ${{ github.token }}
+
+  receipts:
+    # Recompute published eval rates from eval/results.json and fail if README drifts.
+    # Does not call a model. The live harness is bin/eval_real.py (needs the claude CLI).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - name: Check README eval numbers against the committed artifact
+        run: PYTHONPATH=. python bin/check_receipts.py
+
+  no-employer-data:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Block employer / export-control markers and committed build junk
+        run: |
+          # Policy files under .cursor and this workflow name the markers on purpose.
+          # README's author bio (## About) is the only biographical blurb; scan the rest.
+          ! git grep -nIiE 'lockheed|\blmco\b|\bCUI\b|ITAR|EXPORT CONTROLLED|PROPRIETARY' -- . ':!.cursor' ':!AGENTS.md' ':!.github' ':!README.md'
+          python3 -c '
+          import pathlib, re, sys
+          text = pathlib.Path("README.md").read_text()
+          body, sep, _bio = text.partition("\n## About\n")
+          if not sep:
+              sys.exit("README.md has no ## About section to treat as the author bio")
+          pat = re.compile(r"lockheed|\blmco\b|\bCUI\b|ITAR|EXPORT CONTROLLED|PROPRIETARY", re.I)
+          hits = [f"README.md:{i}:{line}" for i, line in enumerate(body.splitlines(), 1) if pat.search(line)]
+          if hits:
+              print("\n".join(hits), file=sys.stderr)
+              sys.exit(1)
+          '
+          ! git ls-files | grep -E '(__pycache__/|\.pyc$|^\.coverage$)'
