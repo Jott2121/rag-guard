@@ -7,7 +7,8 @@ input="$(cat)"
 # Any other non-zero status (invalid JSON, non-object) stays non-zero so failClosed denies.
 set +e
 cmd="$(printf '%s' "$input" | python3 -c '
-import json, sys
+import json, shlex, sys
+
 try:
     data = json.load(sys.stdin)
 except json.JSONDecodeError:
@@ -17,6 +18,87 @@ if not isinstance(data, dict):
 cmd = data.get("command", None)
 if not isinstance(cmd, str) or not cmd.strip():
     sys.exit(2)
+
+# Git accepts any unambiguous prefix of a long option, so --force-w is
+# --force-with-lease. Judge each simple command on its own so curl -f or
+# rm -rf beside a plain git push is not a force-push.
+FORCE = ("force", "force-with-lease", "force-if-includes")
+
+def segments(text):
+    parts, buf, quote, i = [], [], None, 0
+    while i < len(text):
+        c = text[i]
+        if quote:
+            buf.append(c)
+            if c == quote:
+                quote = None
+            i += 1
+            continue
+        if c in ("'\''", "\""):
+            quote = c
+            buf.append(c)
+            i += 1
+            continue
+        if c in "\n;|":
+            parts.append("".join(buf)); buf = []; i += 1; continue
+        if text.startswith("&&", i) or text.startswith("||", i):
+            parts.append("".join(buf)); buf = []; i += 2; continue
+        buf.append(c)
+        i += 1
+    parts.append("".join(buf))
+    return [p for p in parts if p.strip()]
+
+def tokens_of(text):
+    try:
+        return shlex.split(text)
+    except ValueError:
+        return text.split()
+
+def git_invocation(tokens):
+    i = 0
+    while i < len(tokens) and "=" in tokens[i] and not tokens[i].startswith("-"):
+        i += 1
+    if i >= len(tokens) or tokens[i] != "git":
+        return None, []
+    i += 1
+    while i < len(tokens):
+        t = tokens[i]
+        if t in ("-C", "-c", "--git-dir", "--work-tree", "--exec-path", "--namespace"):
+            i += 2
+            continue
+        if t.startswith(("--git-dir=", "--work-tree=", "--exec-path=", "--namespace=")):
+            i += 1
+            continue
+        if t in ("-p", "--paginate", "--no-pager", "--bare", "--no-replace-objects"):
+            i += 1
+            continue
+        if t.startswith("-"):
+            return None, []
+        return t, tokens[i + 1:]
+    return None, []
+
+def long_name(token):
+    if not token.startswith("--") or token.startswith("--no-"):
+        return None
+    return token[2:].split("=", 1)[0]
+
+def is_force(token):
+    if token.startswith("-") and not token.startswith("--"):
+        return "f" in token[1:]
+    name = long_name(token)
+    return bool(name) and any(opt.startswith(name) for opt in FORCE)
+
+def is_hard(token):
+    name = long_name(token)
+    return bool(name) and "hard".startswith(name)
+
+for segment in segments(cmd):
+    sub, args = git_invocation(tokens_of(segment))
+    if sub == "push" and any(is_force(t) for t in args):
+        sys.exit(3)
+    if sub == "reset" and any(is_hard(t) for t in args):
+        sys.exit(4)
+
 sys.stdout.write(cmd)
 ')"
 parse_status=$?
@@ -39,45 +121,14 @@ ask()  { json_msg ask "$1" ""; exit 0; }
 if [ "$parse_status" -eq 2 ]; then
   deny "Shell guard blocked a missing command."
 fi
-if [ "$parse_status" -ne 0 ]; then
-  exit "$parse_status"
-fi
-# Flags may sit anywhere, not only beside the subcommand.
-# Denied: `git push origin --force`, `git push origin -f`, `git push -fu`,
-# `git reset HEAD --hard`. A plain `git push` still asks below.
-set -f
-push=0
-reset=0
-force=0
-hard=0
-for token in $cmd; do
-  token="${token#\'}"
-  token="${token%\'}"
-  token="${token#\"}"
-  token="${token%\"}"
-  case "$token" in
-    push) push=1 ;;
-    reset) reset=1 ;;
-    --force|--force=*|--force-with-lease|--force-with-lease=*) force=1 ;;
-    --hard|--hard=*) hard=1 ;;
-    -*)
-      case "$token" in
-        --*) ;;
-        *)
-          case "${token#-}" in
-            *f*) force=1 ;;
-          esac
-          ;;
-      esac
-      ;;
-  esac
-done
-set +f
-if [ "$push" -eq 1 ] && [ "$force" -eq 1 ]; then
+if [ "$parse_status" -eq 3 ]; then
   deny "Force-push blocked by repo policy."
 fi
-if [ "$reset" -eq 1 ] && [ "$hard" -eq 1 ]; then
+if [ "$parse_status" -eq 4 ]; then
   deny "History rewrite blocked by repo policy."
+fi
+if [ "$parse_status" -ne 0 ]; then
+  exit "$parse_status"
 fi
 case "$cmd" in
   *"rebase"*)                                        deny "History rewrite blocked by repo policy." ;;

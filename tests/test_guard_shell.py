@@ -39,15 +39,25 @@ class GuardShellTests(unittest.TestCase):
             "git push origin -f",
             "git push -fu origin",
             "git push --force",
-            "git push --force-with-lease origin",
+            "git push --force-w origin",
+            "git push origin --force-with-lease",
+            "git -c user.name=x push origin --force",
             "git reset HEAD --hard",
             "git reset --hard HEAD",
+            "git reset --har",
         ]
         for command in denied:
             got = decision(json.dumps({"command": command}))
             self.assertEqual(got["permission"], "deny", command)
-        asked = decision(json.dumps({"command": "git push -u origin main"}))
-        self.assertEqual(asked["permission"], "ask")
+        asked = [
+            "git push -u origin main",
+            "git push --no-force origin main",
+            "git push origin main && curl -f https://example.com",
+            "curl -f https://example.com && git push origin main",
+        ]
+        for command in asked:
+            got = decision(json.dumps({"command": command}))
+            self.assertEqual(got["permission"], "ask", command)
         for command in ("git reset HEAD", "git reset --soft HEAD"):
             got = decision(json.dumps({"command": command}))
             self.assertEqual(got["permission"], "allow", command)
