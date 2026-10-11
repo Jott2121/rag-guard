@@ -65,9 +65,10 @@ jobs:
         with:
           python-version: "3.12"
       # Employer terms: whole tree vs SHA-256 hashes in .github/blocked-terms.sha256
-      # (missing/empty file fails), plus optional BLOCKED_TERMS secret.
+      # (missing/empty file fails, so no secret is needed to catch the name).
+      # Optional EMPLOYER_MARKERS secret: extra regex alternation on top, never instead.
       # Export-control markers skip policy files and the README "## About" bio.
       - name: Block employer terms, export-control markers, and committed build junk
         env:
-          BLOCKED_TERMS: ${{ secrets.BLOCKED_TERMS }}
+          EMPLOYER_MARKERS: ${{ secrets.EMPLOYER_MARKERS }}
         run: python bin/check_no_employer_data.py

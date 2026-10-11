@@ -4,17 +4,25 @@ Employer terms are never stored in plain text. `.github/blocked-terms.sha256`
 holds one SHA-256 per line of a lowercased term (words joined by one space).
 Every tracked file is tokenized into lowercase alphanumeric words (once as-is,
 once split at camelCase boundaries), and each word, each adjacent 2-word
-phrase, and each adjacent pair glued together is hashed and looked up. Terms longer than two words cannot match. The optional
-`BLOCKED_TERMS` env var adds comma-separated plain-text terms (a CI secret).
-This scan covers the whole tree with no exclusions. Hits are reported by path,
-line, and hash prefix only, so CI logs never echo the term.
+phrase, and each adjacent pair glued together is hashed and looked up. Terms
+longer than two words cannot match. The hash list is the fail-closed base: it
+catches the employer name with no secret set.
+
+The optional `EMPLOYER_MARKERS` env var (an Actions secret of the same name)
+is a case-insensitive regex alternation applied to every line on top of the
+hashes. Unset or blank adds nothing; it never replaces the hash list.
+
+The employer scan covers every tracked file, including `AGENTS.md`, `.cursor/`,
+`.github/`, and the README bio. Only the hash file itself is excluded. Hits are
+reported by path, line, and hash prefix, so CI logs never echo the term.
 
 Export-control markers are generic, so they stay as a regex. The README author
 bio (from "## About" through EOF) and policy files that name the markers on
 purpose (`.cursor/`, `AGENTS.md`, `.github/`) are skipped for markers only.
 
-A missing, empty, or malformed hash file, a git failure, or an unsupported
-`BLOCKED_TERMS` entry exits non-zero. The check does not pass when it cannot run.
+A missing, empty, or malformed hash file, an invalid or match-everything
+`EMPLOYER_MARKERS`, or a git failure exits non-zero. The check does not pass
+when it cannot run.
 """
 from __future__ import annotations
 
@@ -25,6 +33,7 @@ import subprocess
 import sys
 from collections.abc import Iterable, Iterator, Mapping
 from pathlib import Path
+from typing import NamedTuple
 
 ROOT = Path(__file__).resolve().parents[1]
 HASH_FILE = Path(".github") / "blocked-terms.sha256"
@@ -42,15 +51,16 @@ MARKER = re.compile(_MARKER_SRC, re.IGNORECASE)
 JUNK = re.compile(r"(?:^|/)__pycache__/|\.pyc$|^\.coverage$")
 
 
+class Blocklist(NamedTuple):
+    hashes: frozenset[str]
+    extra: re.Pattern[str] | None
+
+
 def sha256(term: str) -> str:
     return hashlib.sha256(term.encode("utf-8")).hexdigest()
 
 
-def normalize(term: str) -> str:
-    return " ".join(WORD.findall(term.lower()))
-
-
-def load_hashes(path: Path) -> set[str]:
+def load_hashes(path: Path) -> frozenset[str]:
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
     except OSError as exc:
@@ -65,19 +75,24 @@ def load_hashes(path: Path) -> set[str]:
         hashes.add(line)
     if not hashes:
         raise SystemExit(f"blocked-terms hash file has no hashes: {path}")
-    return hashes
+    return frozenset(hashes)
 
 
-def env_hashes(env: Mapping[str, str]) -> set[str]:
-    hashes: set[str] = set()
-    for raw in env.get("BLOCKED_TERMS", "").split(","):
-        term = normalize(raw)
-        if not term:
-            continue
-        if term.count(" ") > 1:
-            raise SystemExit("BLOCKED_TERMS entries must be one or two words")
-        hashes.add(sha256(term))
-    return hashes
+def env_markers(env: Mapping[str, str]) -> re.Pattern[str] | None:
+    source = env.get("EMPLOYER_MARKERS", "").strip()
+    if not source:
+        return None
+    try:
+        pattern = re.compile(source, re.IGNORECASE)
+    except re.error as exc:
+        raise SystemExit(f"EMPLOYER_MARKERS is not a valid regex: {exc}") from exc
+    if pattern.search(""):
+        raise SystemExit("EMPLOYER_MARKERS matches the empty string (empty alternative?)")
+    return pattern
+
+
+def load_blocklist(root: Path, env: Mapping[str, str]) -> Blocklist:
+    return Blocklist(load_hashes(root / HASH_FILE), env_markers(env))
 
 
 def candidates(line: str) -> Iterator[str]:
@@ -89,11 +104,13 @@ def candidates(line: str) -> Iterator[str]:
             yield a + b
 
 
-def term_hits(path: str, text: str, hashes: set[str]) -> list[str]:
+def term_hits(path: str, text: str, blocklist: Blocklist) -> list[str]:
     hits = []
     for lineno, line in enumerate(text.splitlines(), 1):
-        for digest in {sha256(c) for c in candidates(line)} & hashes:
+        for digest in sorted({sha256(c) for c in candidates(line)} & blocklist.hashes):
             hits.append(f"{path}:{lineno}: blocked term (sha256 {digest[:12]})")
+        if blocklist.extra and blocklist.extra.search(line):
+            hits.append(f"{path}:{lineno}: EMPLOYER_MARKERS match")
     return hits
 
 
@@ -137,15 +154,13 @@ def marker_lines(path: str, text: str) -> list[str]:
     return [f"{path}:{n}: export-control marker" for n in line_hits(text)]
 
 
-def blocked_hashes(root: Path, env: Mapping[str, str]) -> set[str]:
-    return load_hashes(root / HASH_FILE) | env_hashes(env)
-
-
 def scan_paths(paths: Iterable[str], root: Path, env: Mapping[str, str]) -> int:
-    hashes = blocked_hashes(root, env)
+    blocklist = load_blocklist(root, env)
     hits: list[str] = []
     for path in paths:
-        hits.extend(term_hits(path, read_text(Path(path)), hashes))
+        if Path(path).resolve() == (root / HASH_FILE).resolve():
+            continue
+        hits.extend(term_hits(path, read_text(Path(path)), blocklist))
     if hits:
         print("\n".join(hits), file=sys.stderr)
         return 1
@@ -153,7 +168,7 @@ def scan_paths(paths: Iterable[str], root: Path, env: Mapping[str, str]) -> int:
 
 
 def main(root: Path = ROOT, env: Mapping[str, str] = os.environ) -> int:
-    hashes = blocked_hashes(root, env)
+    blocklist = load_blocklist(root, env)
     files = tracked_files(root)
     junk = [path for path in files if JUNK.search(path)]
     if junk:
@@ -163,13 +178,18 @@ def main(root: Path = ROOT, env: Mapping[str, str] = os.environ) -> int:
     hits: list[str] = []
     for path in files:
         text = read_text(root / path)
-        hits.extend(term_hits(path, text, hashes))
+        if path != HASH_FILE.as_posix():
+            hits.extend(term_hits(path, text, blocklist))
         hits.extend(marker_lines(path, text))
     if hits:
         print("employer term / export-control marker:", file=sys.stderr)
         print("\n".join(hits), file=sys.stderr)
         return 1
-    print(f"no blocked terms ({len(hashes)} hashes) or export-control markers in {len(files)} tracked files")
+    extra = " + EMPLOYER_MARKERS" if blocklist.extra else ""
+    print(
+        f"no blocked terms ({len(blocklist.hashes)} hashes{extra}) "
+        f"or export-control markers in {len(files)} tracked files"
+    )
     return 0
 
 

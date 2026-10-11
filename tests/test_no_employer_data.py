@@ -60,27 +60,50 @@ class HashScanTests(unittest.TestCase):
             self.assertIn(f"{rel}:2: blocked term", err)
             self.assertNotIn("zorblax", err.lower())
 
+    def test_planted_term_is_caught_with_no_secret_set(self):
+        r = self.repo({"README.md": f"hi\n## About\nex-{PLANTED} engineer\n"})
+        for env in ({}, {"EMPLOYER_MARKERS": ""}, {"EMPLOYER_MARKERS": "   "}):
+            code, err = r.run(env)
+            self.assertEqual(code, 1, env)
+            self.assertIn("README.md:3: blocked term", err)
+
     def test_single_word_hyphen_and_glued_forms_match(self):
-        hashes = {scan.sha256("zorblax"), scan.sha256(PLANTED)}
+        bl = scan.Blocklist(frozenset({scan.sha256("zorblax"), scan.sha256(PLANTED)}), None)
         for line in ["Zorblax", "zorblax-quantics", "ZorblaxQuantics", "zorblax_quantics"]:
-            self.assertTrue(scan.term_hits("f", line, hashes), line)
+            self.assertTrue(scan.term_hits("f", line, bl), line)
+        single = scan.Blocklist(frozenset({scan.sha256("zorblax")}), None)
         for line in ["zorblaxy", "xzorblax", "zorbla"]:
-            self.assertEqual(scan.term_hits("f", line, {scan.sha256("zorblax")}), [], line)
+            self.assertEqual(scan.term_hits("f", line, single), [], line)
 
     def test_clean_tree_passes(self):
         code, err = self.repo({"README.md": "hello\n## About\nbio\n", "results/a.json": "{}\n"}).run()
         self.assertEqual((code, err), (0, ""))
 
-    def test_blocked_terms_env_adds_terms(self):
-        r = self.repo({"notes.md": "Visit Frobnitz Works today\n"})
-        self.assertEqual(r.run()[0], 0)
-        code, err = r.run({"BLOCKED_TERMS": " other , FROBNITZ   works "})
+    def test_employer_markers_env_adds_regex_on_top_of_hashes(self):
+        r = self.repo({".cursor/rules/r.mdc": "Visit Frobnitz Works today\n", "b.txt": f"{PLANTED}\n"})
+        code, err = r.run()
         self.assertEqual(code, 1)
-        self.assertIn("notes.md:1: blocked term", err)
+        self.assertNotIn("r.mdc", err)
+        code, err = r.run({"EMPLOYER_MARKERS": r"other|frobnitz\s+works"})
+        self.assertEqual(code, 1)
+        self.assertIn(".cursor/rules/r.mdc:1: EMPLOYER_MARKERS match", err)
+        self.assertIn("b.txt:1: blocked term", err)
+        self.assertNotIn("frobnitz", err.lower())
 
-    def test_blocked_terms_env_rejects_three_words(self):
-        with self.assertRaises(SystemExit):
-            scan.env_hashes({"BLOCKED_TERMS": "one two three"})
+    def test_employer_markers_invalid_or_match_all_fails_closed(self):
+        for source in ["(unclosed", "a||b", ".*"]:
+            with self.assertRaises(SystemExit, msg=source):
+                scan.env_markers({"EMPLOYER_MARKERS": source})
+
+    def test_hash_file_is_the_only_exclusion(self):
+        digest = scan.sha256(PLANTED)
+        r = self.repo({"a.txt": "x\n"}, hash_lines=[digest])
+        self.assertEqual(r.run({"EMPLOYER_MARKERS": digest[:16]})[0], 0)
+        (r.root / "copy.txt").write_text(digest + "\n")
+        subprocess.run(["git", "add", "copy.txt"], cwd=r.root, check=True)
+        code, err = r.run({"EMPLOYER_MARKERS": digest[:16]})
+        self.assertEqual(code, 1)
+        self.assertIn("copy.txt:1: EMPLOYER_MARKERS match", err)
 
     def test_missing_hash_file_fails_closed(self):
         with self.assertRaises(SystemExit):
