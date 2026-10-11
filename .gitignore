@@ -10,3 +10,6 @@ dist/
 .coverage
 coverage.xml
 htmlcov/
+
+# Cursor hook receipts (local; created by .cursor/hooks/)
+.cursor/hook-logs/
