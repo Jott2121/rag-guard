@@ -54,12 +54,12 @@ def tokens_of(text):
     except ValueError:
         return text.split()
 
-def git_invocation(tokens):
-    i = 0
-    while i < len(tokens) and "=" in tokens[i] and not tokens[i].startswith("-"):
-        i += 1
-    if i >= len(tokens) or tokens[i] != "git":
-        return None, []
+def is_git_bin(token):
+    name = token.replace("\\", "/").rsplit("/", 1)[-1]
+    return name == "git" or name.lower() == "git.exe"
+
+def invocation_at(tokens, i):
+    """Subcommand and args after a git binary at tokens[i]."""
     i += 1
     while i < len(tokens):
         t = tokens[i]
@@ -92,12 +92,24 @@ def is_hard(token):
     name = long_name(token)
     return bool(name) and "hard".startswith(name)
 
-for segment in segments(cmd):
-    sub, args = git_invocation(tokens_of(segment))
-    if sub == "push" and any(is_force(t) for t in args):
-        sys.exit(3)
-    if sub == "reset" and any(is_hard(t) for t in args):
-        sys.exit(4)
+def walk(text, depth=0):
+    if depth > 3:
+        return
+    for segment in segments(text):
+        tokens = tokens_of(segment)
+        i = 0
+        while i < len(tokens):
+            if is_git_bin(tokens[i]):
+                sub, args = invocation_at(tokens, i)
+                if sub == "push" and any(is_force(t) for t in args):
+                    sys.exit(3)
+                if sub == "reset" and any(is_hard(t) for t in args):
+                    sys.exit(4)
+            elif any(ch.isspace() for ch in tokens[i]):
+                walk(tokens[i], depth + 1)
+            i += 1
+
+walk(cmd)
 
 sys.stdout.write(cmd)
 ')"
