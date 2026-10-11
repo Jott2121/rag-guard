@@ -21,7 +21,8 @@ if not isinstance(cmd, str) or not cmd.strip():
 
 # Git accepts any unambiguous prefix of a long option, so --force-w is
 # --force-with-lease. Judge each simple command on its own so curl -f or
-# rm -rf beside a plain git push is not a force-push.
+# rm -rf beside a plain git push is not a force-push. Path-qualified git,
+# wrappers, shell -c strings, and a later nested git count too.
 FORCE = ("force", "force-with-lease", "force-if-includes")
 
 def segments(text):
@@ -54,28 +55,70 @@ def tokens_of(text):
     except ValueError:
         return text.split()
 
-def git_invocation(tokens):
+def basename(token):
+    return token.rsplit("/", 1)[-1]
+
+def is_git(token):
+    if token == "git":
+        return True
+    if basename(token) != "git":
+        return False
+    return token.startswith(("/", "./", "../", "~/"))
+
+def is_shell(token):
+    return basename(token) in ("sh", "bash", "dash", "zsh", "ksh", "ash")
+
+def git_invocations(tokens):
+    found = []
     i = 0
-    while i < len(tokens) and "=" in tokens[i] and not tokens[i].startswith("-"):
+    n = len(tokens)
+    while i < n:
+        if not is_git(tokens[i]):
+            i += 1
+            continue
+        j = i + 1
+        sub = None
+        while j < n:
+            t = tokens[j]
+            if t in ("-C", "-c", "--git-dir", "--work-tree", "--exec-path", "--namespace"):
+                j += 2
+                continue
+            if t.startswith(("--git-dir=", "--work-tree=", "--exec-path=", "--namespace=")):
+                j += 1
+                continue
+            if t in ("-p", "--paginate", "--no-pager", "--bare", "--no-replace-objects"):
+                j += 1
+                continue
+            if not t.startswith("-"):
+                sub = t
+            break
+        if sub is not None:
+            found.append((sub, tokens[j + 1:]))
         i += 1
-    if i >= len(tokens) or tokens[i] != "git":
-        return None, []
-    i += 1
-    while i < len(tokens):
-        t = tokens[i]
-        if t in ("-C", "-c", "--git-dir", "--work-tree", "--exec-path", "--namespace"):
-            i += 2
+    return found
+
+def shell_scripts(tokens):
+    scripts = []
+    n = len(tokens)
+    for i, token in enumerate(tokens):
+        if not is_shell(token):
             continue
-        if t.startswith(("--git-dir=", "--work-tree=", "--exec-path=", "--namespace=")):
-            i += 1
-            continue
-        if t in ("-p", "--paginate", "--no-pager", "--bare", "--no-replace-objects"):
-            i += 1
-            continue
-        if t.startswith("-"):
-            return None, []
-        return t, tokens[i + 1:]
-    return None, []
+        j = i + 1
+        while j < n:
+            t = tokens[j]
+            if t == "--":
+                break
+            if t.startswith("--"):
+                j += 1
+                continue
+            if t.startswith("-") and "c" in t[1:]:
+                if j + 1 < n:
+                    scripts.append(tokens[j + 1])
+                break
+            if not t.startswith("-"):
+                break
+            j += 1
+    return scripts
 
 def long_name(token):
     if not token.startswith("--") or token.startswith("--no-"):
@@ -92,12 +135,30 @@ def is_hard(token):
     name = long_name(token)
     return bool(name) and "hard".startswith(name)
 
-for segment in segments(cmd):
-    sub, args = git_invocation(tokens_of(segment))
-    if sub == "push" and any(is_force(t) for t in args):
-        sys.exit(3)
-    if sub == "reset" and any(is_hard(t) for t in args):
-        sys.exit(4)
+def rewrite_status(command):
+    for segment in segments(command):
+        tokens = tokens_of(segment)
+        for sub, args in git_invocations(tokens):
+            if sub == "push" and any(is_force(t) for t in args):
+                return 3
+            if sub == "reset" and any(is_hard(t) for t in args):
+                return 4
+            if sub == "submodule" and "foreach" in args:
+                for arg in args[args.index("foreach") + 1:]:
+                    if arg.startswith("-"):
+                        continue
+                    status = rewrite_status(arg)
+                    if status:
+                        return status
+        for script in shell_scripts(tokens):
+            status = rewrite_status(script)
+            if status:
+                return status
+    return 0
+
+status = rewrite_status(cmd)
+if status:
+    sys.exit(status)
 
 sys.stdout.write(cmd)
 ')"

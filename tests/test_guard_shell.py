@@ -62,6 +62,41 @@ class GuardShellTests(unittest.TestCase):
             got = decision(json.dumps({"command": command}))
             self.assertEqual(got["permission"], "allow", command)
 
+    def test_wrapped_and_nested_rewrites_are_denied(self):
+        denied = [
+            "/usr/bin/git push --force",
+            "sudo git push origin --force",
+            'bash -c "git push --force"',
+            'bash -lc "git reset --hard"',
+            "git submodule foreach git push --force",
+            'git submodule foreach "git push --force"',
+            "/usr/bin/git reset --hard",
+            "sudo git reset --hard",
+            'bash -c "git reset --hard"',
+        ]
+        for command in denied:
+            got = decision(json.dumps({"command": command}))
+            self.assertEqual(got["permission"], "deny", command)
+        asked = [
+            "/usr/bin/git push origin main",
+            "sudo git push origin main",
+            'bash -c "git push origin main"',
+            'bash -c "curl -f https://example.com && git push origin main"',
+            "git submodule foreach git push origin main",
+        ]
+        for command in asked:
+            got = decision(json.dumps({"command": command}))
+            self.assertEqual(got["permission"], "ask", command)
+        allowed = [
+            "/usr/bin/git reset HEAD",
+            "sudo git reset --soft HEAD",
+            'bash -c "git reset HEAD"',
+            "git submodule foreach git reset HEAD",
+        ]
+        for command in allowed:
+            got = decision(json.dumps({"command": command}))
+            self.assertEqual(got["permission"], "allow", command)
+
     def test_plain_pull_is_allowed_and_rebase_pull_is_denied(self):
         allowed = decision(json.dumps({"command": "git pull origin main"}))
         self.assertEqual(allowed["permission"], "allow")
