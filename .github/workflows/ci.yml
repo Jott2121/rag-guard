@@ -64,7 +64,11 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
-      # Python re word boundaries. A git or read failure exits non-zero.
-      # README "## About" is the author bio and is not scanned.
-      - name: Block employer / export-control markers and committed build junk
+      # Employer terms: whole tree vs SHA-256 hashes in .github/blocked-terms.sha256
+      # (missing/empty file fails, so no secret is needed to catch the name).
+      # Optional EMPLOYER_MARKERS secret: extra regex alternation on top, never instead.
+      # Export-control markers skip policy files and the README "## About" bio.
+      - name: Block employer terms, export-control markers, and committed build junk
+        env:
+          EMPLOYER_MARKERS: ${{ secrets.EMPLOYER_MARKERS }}
         run: python bin/check_no_employer_data.py

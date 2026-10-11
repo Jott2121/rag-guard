@@ -22,6 +22,7 @@ pip install -e ".[dev]"     # setup. CI also installs pytest-cov for the coverag
 python -m pytest -q         # tests (Python 3.11–3.13, FakeProvider, no keys, no network)
 python -m pytest -q --cov=rag_guard --cov-report=term-missing --cov-fail-under=90
 python bin/check_receipts.py                 # offline: README rates vs eval/results.json
+python bin/check_no_employer_data.py         # employer terms by SHA-256 (.github/blocked-terms.sha256), whole tree
 PYTHONPATH=. python3 bin/eval_real.py        # live harness; needs claude on PATH; writes eval/results.json
 python bin/demo.py                           # grounded answer, refusal, PII redaction, tiny eval
 PYTHONPATH=. python3 bin/hook_report.py      # join hook fires to session transcripts
@@ -60,7 +61,7 @@ A task is not done until the tests pass and the output is pasted in the PR. The 
 - `rag_guard/` — pipeline, guards, TF-IDF retriever, JSON + sqlite indexes, corpus, web corroboration, rebuild health, hook log
 - `tests/` — unittest-style pytest; offline; includes hook-isolation and eval-harness tests
 - `eval/` — committed `results.json` from the 20-case live run
-- `bin/` — `demo.py`, `eval_real.py`, `hook_userpromptsubmit.py`, `hook_report.py`, `check_receipts.py`
+- `bin/` — `demo.py`, `eval_real.py`, `hook_userpromptsubmit.py`, `hook_report.py`, `check_receipts.py`, `check_no_employer_data.py`
 - `ops/` — launchd plist for a scheduled sqlite reindex
 - `docs/superpowers/` — guarded-grounding design spec and plan
 - `.github/` — CI (3.11–3.13 + coverage comment + receipt and employer-data jobs), CodeQL, Dependabot, tag-triggered publish
@@ -75,4 +76,5 @@ A task is not done until the tests pass and the output is pasted in the PR. The 
 - **Hook isolation fails closed.** `bin/hook_userpromptsubmit.py` grounds only interactive entrypoints (`cli`, `vscode`, `jetbrains`). `claude -p` reports `sdk-cli` and gets silence. Opt back in only with `RAG_GUARD_ALLOW_HEADLESS=1`. Error handling stays fail-open. Do not weaken this.
 - **Hook log.** `hooklog.py` records fires and silences to `~/.local/state/rag-guard/hook-fires.jsonl` (mode 0600), opt-in via `RAG_GUARD_HOOK_LOG=1`. Change `MIN_SCORE` / `HOOK_MIN_OVERLAP` from `bin/hook_report.py` data, not intuition.
 - **Live eval is not the CI gate.** `bin/eval_real.py` overwrites `eval/results.json`. CI runs `bin/check_receipts.py` only. Do not commit a new results file unless the README numbers change in the same PR.
+- **Blocked employer terms live only as hashes.** To block a new term, append `printf '%s' "<term lowercased, words joined by one space>" | sha256sum` to `.github/blocked-terms.sha256`. Never write the term itself in a file, commit message, or PR. One- and two-word terms only. A missing or empty hash file fails the job. The optional `EMPLOYER_MARKERS` secret (case-insensitive regex alternation) adds patterns on top of the hashes; it never replaces them, so the scan still catches the name with no secret set.
 - **No Grok client in this repo.** `.cursor/rules/60-grok-integration.mdc` is intentionally omitted. Keep the `complete(prompt) -> str` seam.
